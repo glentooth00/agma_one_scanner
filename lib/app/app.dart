@@ -1,9 +1,71 @@
 
 import 'package:flutter/material.dart';
+
+import '../screens/auth/login_screen.dart';
+import '../services/local_admin_auth.dart';
 import 'theme.dart';
 
-class AgmaScannerApp extends StatelessWidget {
+// ======================================================
+// MAIN APPLICATION
+// ======================================================
+
+class AgmaScannerApp extends StatefulWidget {
   const AgmaScannerApp({super.key});
+
+  @override
+  State<AgmaScannerApp> createState() => _AgmaScannerAppState();
+}
+
+class _AgmaScannerAppState extends State<AgmaScannerApp> {
+  bool _isCheckingSession = true;
+  bool _isAuthenticated = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _restoreSession();
+  }
+
+  // CHECK LOCAL ADMINISTRATOR SESSION
+  Future<void> _restoreSession() async {
+    try {
+      await LocalAdminAuth.initialize();
+
+      final loggedIn = await LocalAdminAuth.isLoggedIn();
+
+      if (!mounted) return;
+
+      setState(() {
+        _isAuthenticated = loggedIn;
+        _isCheckingSession = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _isAuthenticated = false;
+        _isCheckingSession = false;
+      });
+    }
+  }
+
+  // LOGIN SUCCESS
+  void _handleLoginSuccess() {
+    setState(() {
+      _isAuthenticated = true;
+    });
+  }
+
+  // LOGOUT
+  Future<void> _handleLogout() async {
+    await LocalAdminAuth.logout();
+
+    if (!mounted) return;
+
+    setState(() {
+      _isAuthenticated = false;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -11,7 +73,17 @@ class AgmaScannerApp extends StatelessWidget {
       title: 'AGMA ONE Scanner',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
-      home: const AppShell(),
+      home: _isCheckingSession
+          ? const Scaffold(
+              body: Center(
+                child: CircularProgressIndicator(),
+              ),
+            )
+          : _isAuthenticated
+              ? AppShell(onLogout: _handleLogout)
+              : LoginScreen(
+                  onLoginSuccess: _handleLoginSuccess,
+                ),
     );
   }
 }
@@ -21,7 +93,12 @@ class AgmaScannerApp extends StatelessWidget {
 // ======================================================
 
 class AppShell extends StatefulWidget {
-  const AppShell({super.key});
+  final VoidCallback onLogout;
+
+  const AppShell({
+    super.key,
+    required this.onLogout,
+  });
 
   @override
   State<AppShell> createState() => _AppShellState();
@@ -47,7 +124,9 @@ class _AppShellState extends State<AppShell> {
           ),
           const ScannerPage(),
           const HistoryPage(),
-          const SettingsPage(),
+          SettingsPage(
+            onLogout: widget.onLogout,
+          ),
         ],
       ),
       bottomNavigationBar: NavigationBar(
@@ -83,7 +162,10 @@ class _AppShellState extends State<AppShell> {
 class DashboardPage extends StatelessWidget {
   final VoidCallback onStartScanning;
 
-  const DashboardPage({super.key, required this.onStartScanning});
+  const DashboardPage({
+    super.key,
+    required this.onStartScanning,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -340,7 +422,9 @@ class DashboardPage extends StatelessWidget {
               width: double.infinity,
               child: ElevatedButton.icon(
                 onPressed: onStartScanning,
-                icon: const Icon(Icons.qr_code_scanner_rounded),
+                icon: const Icon(
+                  Icons.qr_code_scanner_rounded,
+                ),
                 label: const Text('Start Scanning'),
               ),
             ),
@@ -443,7 +527,8 @@ class ScannerPage extends StatelessWidget {
     return const _PlaceholderPage(
       icon: Icons.qr_code_scanner_rounded,
       title: 'QR Scanner',
-      description: 'Scan a member QR code to retrieve their registration information.',
+      description:
+          'Scan a member QR code to retrieve their registration information.',
     );
   }
 }
@@ -460,7 +545,8 @@ class HistoryPage extends StatelessWidget {
     return const _PlaceholderPage(
       icon: Icons.history_rounded,
       title: 'Scan History',
-      description: 'Your recent member scans and attendance confirmations will appear here.',
+      description:
+          'Your recent member scans and attendance confirmations will appear here.',
     );
   }
 }
@@ -470,14 +556,89 @@ class HistoryPage extends StatelessWidget {
 // ======================================================
 
 class SettingsPage extends StatelessWidget {
-  const SettingsPage({super.key});
+  final VoidCallback onLogout;
+
+  const SettingsPage({
+    super.key,
+    required this.onLogout,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return const _PlaceholderPage(
-      icon: Icons.settings_outlined,
-      title: 'Settings',
-      description: 'Manage your scanner account, assigned station, and application preferences.',
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Settings',
+              style: TextStyle(
+                fontSize: 25,
+                fontWeight: FontWeight.w800,
+                color: AppTheme.primary,
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Manage your AGMA ONE scanner device.',
+              style: TextStyle(
+                fontSize: 13,
+                color: AppTheme.textSecondary,
+              ),
+            ),
+            const SizedBox(height: 25),
+
+            const _PlaceholderPage(
+              icon: Icons.settings_outlined,
+              title: 'Device Configuration',
+              description:
+                  'Server connection, administrator account, and scanner preferences will be available here.',
+            ),
+
+            const Spacer(),
+
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: () async {
+                  final confirmed = await showDialog<bool>(
+                    context: context,
+                    builder: (dialogContext) {
+                      return AlertDialog(
+                        title: const Text('Logout'),
+                        content: const Text(
+                          'Are you sure you want to log out of the administrator account?',
+                        ),
+                        actions: [
+                          TextButton(
+                            onPressed: () {
+                              Navigator.pop(dialogContext, false);
+                            },
+                            child: const Text('Cancel'),
+                          ),
+                          ElevatedButton(
+                            onPressed: () {
+                              Navigator.pop(dialogContext, true);
+                            },
+                            child: const Text('Logout'),
+                          ),
+                        ],
+                      );
+                    },
+                  );
+
+                  if (confirmed == true) {
+                    onLogout();
+                  }
+                },
+                icon: const Icon(Icons.logout_rounded),
+                label: const Text('Logout Administrator'),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
