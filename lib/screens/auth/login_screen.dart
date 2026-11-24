@@ -3,9 +3,10 @@ import 'package:flutter/material.dart';
 
 import '../../app/theme.dart';
 import '../../services/local_admin_auth.dart';
+import '../../services/scanner_auth_service.dart';
 
 class LoginScreen extends StatefulWidget {
-  final VoidCallback onLoginSuccess;
+  final ValueChanged<String> onLoginSuccess;
 
   const LoginScreen({
     super.key,
@@ -38,33 +39,43 @@ class _LoginScreenState extends State<LoginScreen> {
       _isLoading = true;
     });
 
+    final username = _usernameController.text.trim();
+    final password = _passwordController.text;
+
     try {
-      final authenticated = await LocalAdminAuth.login(
-        username: _usernameController.text,
-        password: _passwordController.text,
-      );
-
-      if (!mounted) return;
-
-      if (authenticated) {
-        widget.onLoginSuccess();
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Incorrect username or password.'),
-            backgroundColor: AppTheme.error,
-          ),
+      // 1. Check the local device administrator first.
+      if (username == 'admin') {
+        final isAdmin = await LocalAdminAuth.login(
+          username: username,
+          password: password,
         );
+
+        if (!mounted) return;
+
+        if (isAdmin) {
+          widget.onLoginSuccess('admin');
+          return;
+        }
+
+        _showError('Invalid administrator username or password.');
+        return;
       }
-    } catch (e) {
+
+      // 2. Otherwise, authenticate scanner personnel through Laravel.
+      await ScannerAuthService.login(
+        username: username,
+        password: password,
+      );
+
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Unable to authenticate administrator.'),
-          backgroundColor: AppTheme.error,
-        ),
-      );
+      widget.onLoginSuccess('scanner');
+    } on ScannerAuthException catch (e) {
+      if (!mounted) return;
+      _showError(e.message);
+    } catch (_) {
+      if (!mounted) return;
+      _showError('Unable to sign in. Please try again.');
     } finally {
       if (mounted) {
         setState(() {
@@ -72,6 +83,15 @@ class _LoginScreenState extends State<LoginScreen> {
         });
       }
     }
+  }
+
+  void _showError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: AppTheme.error,
+      ),
+    );
   }
 
   @override
@@ -156,7 +176,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           const Text(
-                            'Administrator Login',
+                            'Welcome Back',
                             style: TextStyle(
                               fontSize: 23,
                               fontWeight: FontWeight.w800,
@@ -166,7 +186,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                           const SizedBox(height: 7),
                           const Text(
-                            'Sign in to configure your AGMA ONE scanner device.',
+                            'Sign in with your administrator or scanner account.',
                             style: TextStyle(
                               fontSize: 13,
                               height: 1.5,
@@ -190,6 +210,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             controller: _usernameController,
                             textInputAction: TextInputAction.next,
                             autocorrect: false,
+                            enabled: !_isLoading,
                             decoration: const InputDecoration(
                               hintText: 'Enter your username',
                               prefixIcon: Icon(
@@ -198,8 +219,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               ),
                             ),
                             validator: (value) {
-                              if (value == null ||
-                                  value.trim().isEmpty) {
+                              if (value == null || value.trim().isEmpty) {
                                 return 'Please enter your username.';
                               }
                               return null;
@@ -222,6 +242,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             controller: _passwordController,
                             obscureText: _obscurePassword,
                             textInputAction: TextInputAction.done,
+                            enabled: !_isLoading,
                             onFieldSubmitted: (_) => _handleLogin(),
                             decoration: InputDecoration(
                               hintText: 'Enter your password',
@@ -230,12 +251,14 @@ class _LoginScreenState extends State<LoginScreen> {
                                 size: 20,
                               ),
                               suffixIcon: IconButton(
-                                onPressed: () {
-                                  setState(() {
-                                    _obscurePassword =
-                                        !_obscurePassword;
-                                  });
-                                },
+                                onPressed: _isLoading
+                                    ? null
+                                    : () {
+                                        setState(() {
+                                          _obscurePassword =
+                                              !_obscurePassword;
+                                        });
+                                      },
                                 icon: Icon(
                                   _obscurePassword
                                       ? Icons.visibility_outlined
@@ -292,19 +315,18 @@ class _LoginScreenState extends State<LoginScreen> {
 
                   const SizedBox(height: 22),
 
-                  // AUTHORIZATION NOTICE
-                  Row(
+                  const Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const Icon(
+                      Icon(
                         Icons.shield_outlined,
                         size: 15,
                         color: AppTheme.sage,
                       ),
-                      const SizedBox(width: 7),
-                      const Flexible(
+                      SizedBox(width: 7),
+                      Flexible(
                         child: Text(
-                          'Local device administrator access',
+                          'Authorized personnel only',
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             fontSize: 11,
