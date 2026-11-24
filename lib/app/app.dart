@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../screens/auth/login_screen.dart';
 import '../services/local_admin_auth.dart';
+import '../screens/settings/settings_screen.dart';
 import 'theme.dart';
 
 // ======================================================
@@ -565,84 +566,11 @@ class SettingsPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Settings',
-              style: TextStyle(
-                fontSize: 25,
-                fontWeight: FontWeight.w800,
-                color: AppTheme.primary,
-              ),
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              'Manage your AGMA ONE scanner device.',
-              style: TextStyle(
-                fontSize: 13,
-                color: AppTheme.textSecondary,
-              ),
-            ),
-            const SizedBox(height: 25),
-
-            const _PlaceholderPage(
-              icon: Icons.settings_outlined,
-              title: 'Device Configuration',
-              description:
-                  'Server connection, administrator account, and scanner preferences will be available here.',
-            ),
-
-            const Spacer(),
-
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: () async {
-                  final confirmed = await showDialog<bool>(
-                    context: context,
-                    builder: (dialogContext) {
-                      return AlertDialog(
-                        title: const Text('Logout'),
-                        content: const Text(
-                          'Are you sure you want to log out of the administrator account?',
-                        ),
-                        actions: [
-                          TextButton(
-                            onPressed: () {
-                              Navigator.pop(dialogContext, false);
-                            },
-                            child: const Text('Cancel'),
-                          ),
-                          ElevatedButton(
-                            onPressed: () {
-                              Navigator.pop(dialogContext, true);
-                            },
-                            child: const Text('Logout'),
-                          ),
-                        ],
-                      );
-                    },
-                  );
-
-                  if (confirmed == true) {
-                    onLogout();
-                  }
-                },
-                icon: const Icon(Icons.logout_rounded),
-                label: const Text('Logout Administrator'),
-              ),
-            ),
-          ],
-        ),
-      ),
+    return SettingsScreen(
+      onLogout: onLogout,
     );
   }
 }
-
 // ======================================================
 // REUSABLE PLACEHOLDER
 // ======================================================
