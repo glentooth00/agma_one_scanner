@@ -2,10 +2,11 @@
 import 'package:flutter/material.dart';
 
 import '../../app/theme.dart';
+import '../../services/local_admin_auth.dart';
 import '../../services/scanner_auth_service.dart';
 
 class LoginScreen extends StatefulWidget {
-  final VoidCallback onLoginSuccess;
+  final ValueChanged<String> onLoginSuccess;
 
   const LoginScreen({
     super.key,
@@ -38,34 +39,43 @@ class _LoginScreenState extends State<LoginScreen> {
       _isLoading = true;
     });
 
+    final username = _usernameController.text.trim();
+    final password = _passwordController.text;
+
     try {
-      // Authenticate against Laravel's scanner_users table.
+      // 1. Check the local device administrator first.
+      if (username == 'admin') {
+        final isAdmin = await LocalAdminAuth.login(
+          username: username,
+          password: password,
+        );
+
+        if (!mounted) return;
+
+        if (isAdmin) {
+          widget.onLoginSuccess('admin');
+          return;
+        }
+
+        _showError('Invalid administrator username or password.');
+        return;
+      }
+
+      // 2. Otherwise, authenticate scanner personnel through Laravel.
       await ScannerAuthService.login(
-        username: _usernameController.text.trim(),
-        password: _passwordController.text,
+        username: username,
+        password: password,
       );
 
       if (!mounted) return;
 
-      widget.onLoginSuccess();
+      widget.onLoginSuccess('scanner');
     } on ScannerAuthException catch (e) {
       if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(e.message),
-          backgroundColor: AppTheme.error,
-        ),
-      );
+      _showError(e.message);
     } catch (_) {
       if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Unable to connect to AGMA ONE. Please try again.'),
-          backgroundColor: AppTheme.error,
-        ),
-      );
+      _showError('Unable to sign in. Please try again.');
     } finally {
       if (mounted) {
         setState(() {
@@ -73,6 +83,15 @@ class _LoginScreenState extends State<LoginScreen> {
         });
       }
     }
+  }
+
+  void _showError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: AppTheme.error,
+      ),
+    );
   }
 
   @override
@@ -157,7 +176,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           const Text(
-                            'Scanner Personnel Login',
+                            'Welcome Back',
                             style: TextStyle(
                               fontSize: 23,
                               fontWeight: FontWeight.w800,
@@ -167,7 +186,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                           const SizedBox(height: 7),
                           const Text(
-                            'Sign in using your assigned AGMA ONE scanner account.',
+                            'Sign in with your administrator or scanner account.',
                             style: TextStyle(
                               fontSize: 13,
                               height: 1.5,
@@ -296,7 +315,6 @@ class _LoginScreenState extends State<LoginScreen> {
 
                   const SizedBox(height: 22),
 
-                  // AUTHORIZATION NOTICE
                   const Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
@@ -308,7 +326,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       SizedBox(width: 7),
                       Flexible(
                         child: Text(
-                          'Authorized scanner personnel only',
+                          'Authorized personnel only',
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             fontSize: 11,
