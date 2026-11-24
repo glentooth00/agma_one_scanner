@@ -7,77 +7,42 @@ class LocalAdminAuth {
   static const FlutterSecureStorage _storage =
       FlutterSecureStorage();
 
-  static const String _initializedKey = 'local_admin_initialized';
-  static const String _usernameKey = 'local_admin_username';
-  static const String _passwordKey = 'local_admin_password';
-  static const String _sessionKey = 'local_admin_session';
+  // Initial local device administrator credentials.
+  static const String _adminUsername = 'admin';
+  static const String _adminPassword = 'AGMA@One2026';
 
-  static const String defaultUsername = 'admin';
-  static const String defaultPassword = 'AGMA@One2026';
+  static const String _loginKey = 'local_admin_logged_in';
 
-  /// Creates the default administrator account on first launch.
   static Future<void> initialize() async {
-    final initialized = await _storage.read(
-      key: _initializedKey,
-    );
-
-    if (initialized == 'true') return;
-
-    await _storage.write(
-      key: _usernameKey,
-      value: defaultUsername,
-    );
-
-    await _storage.write(
-      key: _passwordKey,
-      value: defaultPassword,
-    );
-
-    await _storage.write(
-      key: _initializedKey,
-      value: 'true',
-    );
+    // Initialize secure storage.
+    await _storage.read(key: _loginKey);
   }
 
-  /// Validates local administrator credentials.
   static Future<bool> login({
     required String username,
     required String password,
   }) async {
-    await initialize();
+    final isValid = username.trim() == _adminUsername &&
+        password == _adminPassword;
 
-    final savedUsername = await _storage.read(
-      key: _usernameKey,
-    );
-
-    final savedPassword = await _storage.read(
-      key: _passwordKey,
-    );
-
-    if (username.trim() != savedUsername ||
-        password != savedPassword) {
+    if (!isValid) {
       return false;
     }
 
     await _storage.write(
-      key: _sessionKey,
+      key: _loginKey,
       value: 'true',
     );
 
     return true;
   }
 
-  /// Checks whether an administrator session exists.
   static Future<bool> isLoggedIn() async {
-    final session = await _storage.read(
-      key: _sessionKey,
-    );
-
-    return session == 'true';
+    final loggedIn = await _storage.read(key: _loginKey);
+    return loggedIn == 'true';
   }
 
-  /// Ends the local administrator session.
   static Future<void> logout() async {
-    await _storage.delete(key: _sessionKey);
+    await _storage.delete(key: _loginKey);
   }
 }
