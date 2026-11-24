@@ -2,7 +2,7 @@
 import 'package:flutter/material.dart';
 
 import '../../app/theme.dart';
-import '../../services/local_admin_auth.dart';
+import '../../services/scanner_auth_service.dart';
 
 class LoginScreen extends StatefulWidget {
   final VoidCallback onLoginSuccess;
@@ -39,29 +39,30 @@ class _LoginScreenState extends State<LoginScreen> {
     });
 
     try {
-      final authenticated = await LocalAdminAuth.login(
-        username: _usernameController.text,
+      // Authenticate against Laravel's scanner_users table.
+      await ScannerAuthService.login(
+        username: _usernameController.text.trim(),
         password: _passwordController.text,
       );
 
       if (!mounted) return;
 
-      if (authenticated) {
-        widget.onLoginSuccess();
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Incorrect username or password.'),
-            backgroundColor: AppTheme.error,
-          ),
-        );
-      }
-    } catch (e) {
+      widget.onLoginSuccess();
+    } on ScannerAuthException catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.message),
+          backgroundColor: AppTheme.error,
+        ),
+      );
+    } catch (_) {
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Unable to authenticate administrator.'),
+          content: Text('Unable to connect to AGMA ONE. Please try again.'),
           backgroundColor: AppTheme.error,
         ),
       );
@@ -156,7 +157,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           const Text(
-                            'Administrator Login',
+                            'Scanner Personnel Login',
                             style: TextStyle(
                               fontSize: 23,
                               fontWeight: FontWeight.w800,
@@ -166,7 +167,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                           const SizedBox(height: 7),
                           const Text(
-                            'Sign in to configure your AGMA ONE scanner device.',
+                            'Sign in using your assigned AGMA ONE scanner account.',
                             style: TextStyle(
                               fontSize: 13,
                               height: 1.5,
@@ -190,6 +191,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             controller: _usernameController,
                             textInputAction: TextInputAction.next,
                             autocorrect: false,
+                            enabled: !_isLoading,
                             decoration: const InputDecoration(
                               hintText: 'Enter your username',
                               prefixIcon: Icon(
@@ -198,8 +200,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               ),
                             ),
                             validator: (value) {
-                              if (value == null ||
-                                  value.trim().isEmpty) {
+                              if (value == null || value.trim().isEmpty) {
                                 return 'Please enter your username.';
                               }
                               return null;
@@ -222,6 +223,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             controller: _passwordController,
                             obscureText: _obscurePassword,
                             textInputAction: TextInputAction.done,
+                            enabled: !_isLoading,
                             onFieldSubmitted: (_) => _handleLogin(),
                             decoration: InputDecoration(
                               hintText: 'Enter your password',
@@ -230,12 +232,14 @@ class _LoginScreenState extends State<LoginScreen> {
                                 size: 20,
                               ),
                               suffixIcon: IconButton(
-                                onPressed: () {
-                                  setState(() {
-                                    _obscurePassword =
-                                        !_obscurePassword;
-                                  });
-                                },
+                                onPressed: _isLoading
+                                    ? null
+                                    : () {
+                                        setState(() {
+                                          _obscurePassword =
+                                              !_obscurePassword;
+                                        });
+                                      },
                                 icon: Icon(
                                   _obscurePassword
                                       ? Icons.visibility_outlined
@@ -293,18 +297,18 @@ class _LoginScreenState extends State<LoginScreen> {
                   const SizedBox(height: 22),
 
                   // AUTHORIZATION NOTICE
-                  Row(
+                  const Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const Icon(
+                      Icon(
                         Icons.shield_outlined,
                         size: 15,
                         color: AppTheme.sage,
                       ),
-                      const SizedBox(width: 7),
-                      const Flexible(
+                      SizedBox(width: 7),
+                      Flexible(
                         child: Text(
-                          'Local device administrator access',
+                          'Authorized scanner personnel only',
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             fontSize: 11,

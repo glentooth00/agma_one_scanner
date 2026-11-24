@@ -22,6 +22,18 @@ class ServerConfigService {
     return await _storage.read(key: _serverUrlKey);
   }
 
+  /// Normalizes the API URL for Dio.
+  /// Always ends with a slash so relative paths retain /api.
+  static String _normalizeApiUrl(String apiBaseUrl) {
+    final cleanUrl = apiBaseUrl.trim();
+
+    if (cleanUrl.isEmpty) {
+      throw ArgumentError('API base URL is required.');
+    }
+
+    return '${cleanUrl.replaceFirst(RegExp(r'/+$'), '')}/';
+  }
+
   /// Builds the API base URL from the server address and port.
   static String buildApiUrl({
     required String host,
@@ -60,21 +72,28 @@ class ServerConfigService {
     return '$scheme://$cleanHost:$portNumber/api';
   }
 
+  /// Creates a Dio client using the configured API URL.
+  static Dio createApiClient(String apiBaseUrl) {
+    return Dio(
+      BaseOptions(
+        baseUrl: _normalizeApiUrl(apiBaseUrl),
+        connectTimeout: _connectionTimeout,
+        receiveTimeout: _receiveTimeout,
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+        },
+      ),
+    );
+  }
+
   /// Tests whether the configured AGMA ONE API is reachable.
   static Future<bool> testConnection(String apiBaseUrl) async {
     try {
-      final dio = Dio(
-        BaseOptions(
-          baseUrl: apiBaseUrl,
-          connectTimeout: _connectionTimeout,
-          receiveTimeout: _receiveTimeout,
-          headers: {
-            'Accept': 'application/json',
-          },
-        ),
-      );
+      final dio = createApiClient(apiBaseUrl);
 
-      final response = await dio.get('/health');
+      // Relative path preserves the /api base path.
+      final response = await dio.get('health');
 
       final data = response.data;
 
@@ -93,19 +112,22 @@ class ServerConfigService {
   ///
   /// If the server changes, the previous scanner token is cleared.
   static Future<void> saveServerUrl(String apiBaseUrl) async {
+    final normalizedUrl =
+        _normalizeApiUrl(apiBaseUrl).replaceFirst(RegExp(r'/$'), '');
+
     final currentUrl = await getServerUrl();
 
-    if (currentUrl != apiBaseUrl) {
+    if (currentUrl != normalizedUrl) {
       await _storage.delete(key: _scannerTokenKey);
     }
 
     await _storage.write(
       key: _serverUrlKey,
-      value: apiBaseUrl,
+      value: normalizedUrl,
     );
   }
 
-  /// Removes the saved server configuration.
+  /// Removes the saved server configuration and scanner token.
   static Future<void> clearServerConfig() async {
     await _storage.delete(key: _serverUrlKey);
     await _storage.delete(key: _scannerTokenKey);
