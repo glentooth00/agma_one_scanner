@@ -1,14 +1,27 @@
+
 import 'package:flutter/material.dart';
 
 import '../app/theme.dart';
+import '../services/scanner_service.dart';
 
-class MemberDetailsScreen extends StatelessWidget {
+class MemberDetailsScreen extends StatefulWidget {
   final Map<String, dynamic> member;
 
   const MemberDetailsScreen({
     super.key,
     required this.member,
   });
+
+  @override
+  State<MemberDetailsScreen> createState() =>
+      _MemberDetailsScreenState();
+}
+
+class _MemberDetailsScreenState extends State<MemberDetailsScreen> {
+  bool _isSubmitting = false;
+  bool _attendanceConfirmed = false;
+
+  Map<String, dynamic> get member => widget.member;
 
   String _value(dynamic value) {
     if (value == null || value.toString().trim().isEmpty) {
@@ -92,6 +105,130 @@ class MemberDetailsScreen extends StatelessWidget {
     );
   }
 
+  Future<void> _confirmAttendance() async {
+    if (_isSubmitting || _attendanceConfirmed) return;
+
+    final registrationId = int.tryParse(
+      member['agma_registration_id']?.toString() ?? '',
+    );
+
+    if (registrationId == null || registrationId <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Registration ID is missing. Please scan the member again.',
+          ),
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      _isSubmitting = true;
+    });
+
+    try {
+      final result = await ScannerService.confirmAttendance(
+        registrationId,
+      );
+
+      if (!mounted) return;
+
+      if (result['already_attended'] == true) {
+        await showDialog<void>(
+          context: context,
+          builder: (dialogContext) {
+            return AlertDialog(
+              icon: const Icon(
+                Icons.warning_amber_rounded,
+                color: AppTheme.warning,
+                size: 42,
+              ),
+              title: const Text('Already Checked In'),
+              content: Text(
+                result['message']?.toString() ??
+                    'This member has already checked in.',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    Navigator.pop(dialogContext);
+                  },
+                  child: const Text('OK'),
+                ),
+              ],
+            );
+          },
+        );
+
+        return;
+      }
+
+      if (result['success'] == true) {
+        setState(() {
+          _attendanceConfirmed = true;
+        });
+
+        await showDialog<void>(
+          context: context,
+          barrierDismissible: false,
+          builder: (dialogContext) {
+            return AlertDialog(
+              icon: const Icon(
+                Icons.check_circle,
+                color: AppTheme.success,
+                size: 48,
+              ),
+              title: const Text('Attendance Confirmed'),
+              content: Text(
+                result['message']?.toString() ??
+                    'Member attendance has been recorded successfully.',
+              ),
+              actions: [
+                FilledButton(
+                  onPressed: () {
+                    Navigator.pop(dialogContext);
+                    Navigator.pop(context, true);
+                  },
+                  child: const Text('Done'),
+                ),
+              ],
+            );
+          },
+        );
+      } else {
+        throw ScannerServiceException(
+          result['message']?.toString() ??
+              'Unable to confirm attendance.',
+        );
+      }
+    } on ScannerServiceException catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.message),
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Something went wrong. Please try again.',
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSubmitting = false;
+        });
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final validId = member['valid_id'] is Map
@@ -122,6 +259,7 @@ class MemberDetailsScreen extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // MEMBER HEADER
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(20),
@@ -167,7 +305,10 @@ class MemberDetailsScreen extends StatelessWidget {
                   ],
                 ),
               ),
+
               const SizedBox(height: 20),
+
+              // MEMBER INFORMATION
               const Text(
                 'MEMBER INFORMATION',
                 style: TextStyle(
@@ -177,7 +318,9 @@ class MemberDetailsScreen extends StatelessWidget {
                   letterSpacing: 1,
                 ),
               ),
+
               const SizedBox(height: 10),
+
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(18),
@@ -208,7 +351,10 @@ class MemberDetailsScreen extends StatelessWidget {
                   ],
                 ),
               ),
+
               const SizedBox(height: 20),
+
+              // IDENTIFICATION DOCUMENT
               const Text(
                 'IDENTIFICATION DOCUMENT',
                 style: TextStyle(
@@ -218,7 +364,9 @@ class MemberDetailsScreen extends StatelessWidget {
                   letterSpacing: 1,
                 ),
               ),
+
               const SizedBox(height: 10),
+
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(16),
@@ -272,7 +420,8 @@ class MemberDetailsScreen extends StatelessWidget {
                                       Text(
                                         'Unable to load valid ID',
                                         style: TextStyle(
-                                          color: AppTheme.textSecondary,
+                                          color:
+                                              AppTheme.textSecondary,
                                         ),
                                       ),
                                     ],
@@ -309,26 +458,60 @@ class MemberDetailsScreen extends StatelessWidget {
                         ],
                       ),
               ),
+
               const SizedBox(height: 24),
+
+              // CONFIRM ATTENDANCE
               SizedBox(
                 width: double.infinity,
                 height: 54,
                 child: ElevatedButton.icon(
-                  onPressed: null,
-                  icon: const Icon(Icons.check_circle_outline),
-                  label: const Text('Confirm Attendance'),
+                  onPressed: _isSubmitting || _attendanceConfirmed
+                      ? null
+                      : _confirmAttendance,
+                  icon: _isSubmitting
+                      ? const SizedBox(
+                          width: 19,
+                          height: 19,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : Icon(
+                          _attendanceConfirmed
+                              ? Icons.check_circle
+                              : Icons.check_circle_outline,
+                        ),
+                  label: Text(
+                    _isSubmitting
+                        ? 'Confirming Attendance...'
+                        : _attendanceConfirmed
+                            ? 'Attendance Confirmed'
+                            : 'Confirm Attendance',
+                  ),
                   style: ElevatedButton.styleFrom(
-                    disabledBackgroundColor: AppTheme.border,
-                    disabledForegroundColor: AppTheme.textSecondary,
+                    backgroundColor: AppTheme.sage,
+                    foregroundColor: Colors.white,
+                    disabledBackgroundColor: _attendanceConfirmed
+                        ? AppTheme.success
+                        : AppTheme.border,
+                    disabledForegroundColor: _attendanceConfirmed
+                        ? Colors.white
+                        : AppTheme.textSecondary,
                   ),
                 ),
               ),
+
               const SizedBox(height: 8),
-              const Center(
+
+              Center(
                 child: Text(
-                  'Attendance confirmation is not yet available.',
+                  _attendanceConfirmed
+                      ? 'This member has been checked in.'
+                      : 'Tap to record this member’s attendance.',
                   textAlign: TextAlign.center,
-                  style: TextStyle(
+                  style: const TextStyle(
                     color: AppTheme.textSecondary,
                     fontSize: 11,
                   ),

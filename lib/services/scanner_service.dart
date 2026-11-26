@@ -104,4 +104,90 @@ class ScannerService {
       );
     }
   }
+
+
+  static Future<Map<String, dynamic>> confirmAttendance(
+    int registrationId,
+  ) async {
+    if (registrationId <= 0) {
+      throw const ScannerServiceException(
+        'Invalid registration ID. Please scan the member again.',
+      );
+    }
+
+    final apiUrl = await ServerConfigService.getServerUrl();
+
+    if (apiUrl == null || apiUrl.trim().isEmpty) {
+      throw const ScannerServiceException(
+        'Server is not configured. Please contact the administrator.',
+      );
+    }
+
+    final token = await ScannerAuthService.getToken();
+
+    if (token == null || token.isEmpty) {
+      throw const ScannerServiceException(
+        'Your session has expired. Please sign in again.',
+      );
+    }
+
+    try {
+      final dio = ServerConfigService.createApiClient(apiUrl);
+
+      final response = await dio.post(
+        'scanner/attendance',
+        data: {
+          'agma_registration_id': registrationId,
+        },
+        options: Options(
+          headers: {
+            'Authorization': 'Bearer $token',
+          },
+        ),
+      );
+
+      return Map<String, dynamic>.from(response.data);
+    } on DioException catch (e) {
+      final responseData = e.response?.data;
+
+      // HTTP 409 means this member has already checked in.
+      if (e.response?.statusCode == 409 &&
+          responseData is Map) {
+        return Map<String, dynamic>.from(responseData);
+      }
+
+      if (responseData is Map &&
+          responseData['message'] != null) {
+        throw ScannerServiceException(
+          responseData['message'].toString(),
+        );
+      }
+
+      if (e.response?.statusCode == 401 ||
+          e.response?.statusCode == 403) {
+        throw const ScannerServiceException(
+          'Your scanner session has expired. Please sign in again.',
+        );
+      }
+
+      if (e.response == null) {
+        throw const ScannerServiceException(
+          'Cannot connect to the AGMA ONE server. Check your connection.',
+        );
+      }
+
+      throw const ScannerServiceException(
+        'Unable to confirm attendance. Please try again.',
+      );
+    } on ScannerServiceException {
+      rethrow;
+    } catch (_) {
+      throw const ScannerServiceException(
+        'Something went wrong while confirming attendance.',
+      );
+    }
+  }
+
+
+
 }
