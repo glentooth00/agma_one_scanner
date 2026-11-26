@@ -5,6 +5,7 @@ import '../screens/auth/login_screen.dart';
 import '../screens/settings/settings_screen.dart';
 import '../services/local_admin_auth.dart';
 import '../services/scanner_auth_service.dart';
+import '../scanner/scanner_screen.dart';
 import 'theme.dart';
 
 // ======================================================
@@ -333,46 +334,7 @@ class ScannerPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppTheme.background,
-      appBar: AppBar(
-        title: const Text('QR Scanner'),
-        backgroundColor: AppTheme.background,
-        elevation: 0,
-      ),
-      body: const Center(
-        child: Padding(
-          padding: EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                Icons.qr_code_scanner,
-                size: 64,
-                color: AppTheme.primary,
-              ),
-              SizedBox(height: 16),
-              Text(
-                'Scanner',
-                style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w800,
-                  color: AppTheme.primary,
-                ),
-              ),
-              SizedBox(height: 8),
-              Text(
-                'The QR scanning interface will be connected here.',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: AppTheme.textSecondary,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
+    return ScannerScreen();
   }
 }
 
